@@ -1,0 +1,346 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Setting up a 3 AZ AWS Network setup. This will error out in ca-central because of the lack of 3 AZs'
+
+Parameters:
+
+  VpcCIDR:
+    Type: String
+    Default: 192.168.0.0/16
+    Description: The CIDR range for the VPC. This should be a valid private (RFC 1918) CIDR range.
+
+  PublicSubnet01CIDR:
+    Type: String
+    Default: 192.168.0.0/19
+    Description: CidrBlock for subnet 01 within the VPC.
+
+  PublicSubnet02CIDR:
+    Type: String
+    Default: 192.168.32.0/19
+    Description: CidrBlock for subnet 02 within the VPC.
+
+  PublicSubnet03CIDR:
+    Type: String
+    Default: 192.168.64.0/18
+    Description: CidrBlock for subnet 03 within the VPC. 
+
+  PrivateSubnet01CIDR:
+    Type: String
+    Default: 192.168.128.0/19
+    Description: CidrBlock for subnet 01 within the VPC.
+
+  PrivateSubnet02CIDR:
+    Type: String
+    Default: 192.168.160.0/19
+    Description: CidrBlock for subnet 02 within the VPC.
+
+  PrivateSubnet03CIDR:
+    Type: String
+    Default: 192.168.192.0/18
+    Description: CidrBlock for subnet 03 within the VPC.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: "Worker Network Configuration"
+        Parameters:
+          - VpcBlock
+          - PublicSubnet01
+          - PublicSubnet02
+          - PublicSubnet03
+          - PrivateSubnet01
+          - PrivateSubnet02
+          - PrivateSubnet03
+
+Conditions:
+  Has2Azs:
+    Fn::Or:
+      - Fn::Equals:
+        - {Ref: 'AWS::Region'}
+        - ap-south-1
+      - Fn::Equals:
+        - {Ref: 'AWS::Region'}
+        - ap-northeast-2
+      - Fn::Equals:
+        - {Ref: 'AWS::Region'}
+        - ca-central-1
+      - Fn::Equals:
+        - {Ref: 'AWS::Region'}
+        - cn-north-1
+
+  HasMoreThan2Azs:
+    Fn::Not:
+      - Condition: Has2Azs
+
+Resources:
+## Setting up  VPC
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock:  !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+      - Key: Name
+        Value: Inception-VPC
+      - Key: "Year"
+        Value: "2020"
+
+## Setting up Internet Gateway
+  InternetGateway:
+    Type: "AWS::EC2::InternetGateway"
+    Properties:
+      Tags:
+      - Key: Name
+        Value: Inception-IGW
+      - Key: "Year"
+        Value: "2020"  
+
+  VPCGatewayAttachment:
+    Type: "AWS::EC2::VPCGatewayAttachment"
+    Properties:
+      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref VPC
+
+## Setting up public subnets
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Public-RouteTable
+      - Key: Network
+        Value: Public
+      - Key: "Year"
+        Value: "2020"
+
+  Route:
+    DependsOn: VPCGatewayAttachment
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet01:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Public Subnet 01
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: PublicSubnet01CIDR
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Public-Subnet-01
+
+  PublicSubnet02:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Public Subnet 02
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: PublicSubnet02CIDR
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Public-Subnet-02
+
+  PublicSubnet03:
+    Condition: HasMoreThan2Azs
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Public Subnet 03
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: PublicSubnet03CIDR
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Public-Subnet-03
+
+  PublicSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet01
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet02
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet03RouteTableAssociation:
+    Condition: HasMoreThan2Azs
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet03
+      RouteTableId: !Ref PublicRouteTable
+
+# NAT Gateway for private subnets
+
+  ElasticIPAddress01:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: VPC
+
+  NATGateway01:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt ElasticIPAddress01.AllocationId
+      SubnetId: !Ref PublicSubnet01
+      Tags:
+      - Key: Name
+        Value: Inception-NATGateway01
+
+# Setting up private Subnets
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Private-RouteTable
+      - Key: Network
+        Value: Private
+      - Key: "Year"
+        Value: "2020"
+
+  PrivateRoute1:            # Private route table can access web via NAT (created below)
+      Type: AWS::EC2::Route
+      Properties:
+        RouteTableId: !Ref PrivateRouteTable
+        DestinationCidrBlock: 0.0.0.0/0
+        # Route traffic through the NAT Gateway:
+        NatGatewayId: !Ref NATGateway01
+
+  PrivateSubnet01:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Private Subnet 01
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '0'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: PrivateSubnet01CIDR
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Private-Subnet-01
+
+  PrivateSubnet02:
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Private Subnet 02
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '1'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: PrivateSubnet02CIDR
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Private-Subnet-02
+
+  PrivateSubnet03:
+    Condition: HasMoreThan2Azs
+    Type: AWS::EC2::Subnet
+    Metadata:
+      Comment: Private Subnet 03
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+        - '2'
+        - Fn::GetAZs:
+            Ref: AWS::Region
+      CidrBlock:
+        Ref: PrivateSubnet03CIDR
+      VpcId:
+        Ref: VPC
+      Tags:
+      - Key: Name
+        Value: Inception-Private-Subnet-03
+
+  PrivateSubnet01RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet01
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet02RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet02
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet03RouteTableAssociation:
+    Condition: HasMoreThan2Azs
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet03
+      RouteTableId: !Ref PrivateRouteTable
+
+
+Outputs:
+
+  VpcId:
+    Description: The VPC Id
+    Value: !Ref VPC
+    
+  PublicSubnet1:
+    Description: Inception-Public-Subnet-1
+    Value: !Ref PublicSubnet01
+
+  PublicSubnet2:
+    Description: Inception-Public-Subnet-2
+    Value: !Ref PublicSubnet02
+
+  PublicSubnet3:
+    Description: Inception-Public-Subnet-3
+    Value: !Ref PublicSubnet03
+
+  PrivateSubnet1:
+    Description: Inception-Private-Subnet-1
+    Value: !Ref PrivateSubnet01
+
+  PrivateSubnet2:
+    Description: Inception-Private-Subnet-2
+    Value: !Ref PrivateSubnet02
+
+  PrivateSubnet3:
+    Description: Inception-Private-Subnet-3
+    Value: !Ref PrivateSubnet03
+
+
