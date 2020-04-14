@@ -1,4 +1,4 @@
-![Alt Text](/temp/Inception2.png)
+![Alt Text](/_temp/Inception2.png)
 
 In this post, we're going to walk through the core concepts of AWS Virtual Private Clouds (VPCs) in the context of an analogy. 
 My main Objectives are:
