@@ -1,0 +1,34 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Admin user and group for an account'
+
+Parameters:
+  UserName:
+    Type: String
+    Description: User name MUST be unique per account globally or it will create an ireversible error
+  
+  AWSAdminPassword:
+    Type: String
+
+Resources:
+## Custom Group ###
+  AWSAdminIAMGroup:
+    Type: AWS::IAM::Group
+    Properties: 
+      GroupName: AWS-admins
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+### Custom User ###
+  AWSAminIAMUser:
+    Type: AWS::IAM::User
+    Properties: 
+      LoginProfile:
+        Password: !Ref AWSAdminPassword
+      Groups: 
+        - !Ref AWSAdminIAMGroup
+      Path: /
+      UserName: !Ref UserName
+
+

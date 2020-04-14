@@ -1,0 +1,36 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Setting up a group and a user for EKS admin'
+
+Resources:
+
+## Custom Group ###
+  EKSAminIAMGroup:
+    Type: AWS::IAM::Group
+    Properties: 
+      GroupName: EKS-admins
+      Path: /
+
+
+### Custom User ###
+  EKSAminIAMUser:
+    Type: AWS::IAM::User
+    Properties: 
+      Groups: 
+        - !Ref EKSAminIAMGroup
+      Path: /
+
+### Custom Policy ###
+  EKSAdminIAMpolicy:
+    Type: AWS::IAM::Policy
+    Properties: 
+      Groups:
+        - !Ref EKSAminIAMGroup
+      PolicyDocument: 
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'eks:*'
+                Resource: '*'
+      PolicyName: EKSAdminIAMpolicy
