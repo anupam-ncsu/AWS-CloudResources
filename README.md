@@ -6,6 +6,8 @@ This projects a basic AWS Enterprise level setup
 
 ### [2: Group and User Creation](UsersGroups/readme.MD)
 
+### [2: EKS Cluster ](EKScluster/readme.md)
+
 
   
   

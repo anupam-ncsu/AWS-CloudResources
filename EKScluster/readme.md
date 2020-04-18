@@ -1,4 +1,7 @@
 # Deploying EKS the Hard Way
+
+![](/_temp/kubernetes1.jpg)
+
 [EKS](https://aws.amazon.com/eks/) is a managed kubernetes service from Amazon AWS. There is nothing difficult about it(Sorry for the misleading title!). That being said, there are still a lot of moving pieces in the backend, to make this peachy platform work.   
 So instead of going the universally acclaimed easiest route of deploying though [EKSCTL](https://eksctl.io/), I will be going into the individual components that we need to make this cluster work, there by understanding more about them instead of just spinning up through a cli command.
 
