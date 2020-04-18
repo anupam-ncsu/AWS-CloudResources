@@ -12,13 +12,13 @@ Both of these can be created using cloud formation through your root account:
 
 The following create a admin account:
 
-[Admin.yaml](/UsersGroups/Admin.yaml)
+## [Admin User](/UsersGroups/Admin.yaml)
 
 This user is suppose to have access through console, hence i provided the username and password.
 
 The second user is for programmatic access to EKS API:
 
-[EKSAdmin.yaml :](/UsersGroups/EKSAdmin.yaml)
+## [EKS Admin User](/UsersGroups/EKSAdmin.yaml)
 
 - Create Cloudformation stacks with these files to create the resources.
 - These files creates a group , user and a policy to attach to them.

@@ -5,7 +5,7 @@ Description: 'Admin user and group for an account'
 Parameters:
   UserName:
     Type: String
-    Description: User name MUST be unique per account globally or it will create an ireversible error
+    Description: User name MUST be unique per account globally or it will create an irreversible error
   
   AWSAdminPassword:
     Type: String
