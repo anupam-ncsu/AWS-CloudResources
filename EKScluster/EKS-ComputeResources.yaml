@@ -1,0 +1,115 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 'Service Catalog: EKS Cluster Control Plane'
+
+Parameters:
+## EFS Configuration Parameters ##
+  KubernetesVersion:
+    Type: String
+    AllowedValues: [ "1.14", "1.13", "1.12" ]
+    Default: "1.14"
+    Description: The Kubernetes control plane version.
+  EksClusterServiceRole:
+    Type: String
+    Description: The Amazon Resource Name (ARN) of the IAM role that provides permissions for Amazon EKS to make calls to other AWS API operations
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+  EksServiceSecurityGroupID:
+    Type: List<AWS::EC2::SecurityGroup::Id>
+  EKSClusterName:
+    Type: String
+    Default: my-eks-cluster
+    Description: The EKS cluster name.
+  AmiType:
+    Type: String
+    Default: AL2_x86_64
+    Description: The AMI type for your node group. GPU instance types should use the AL2_x86_64_GPU AMI type, which uses the Amazon EKS-optimized Linux AMI with GPU support. Non-GPU instances should use the AL2_x86_64 AMI type, which uses the Amazon EKS-optimized Linux AMI.
+    AllowedValues:
+      - AL2_x86_64
+      - AL2_x86_64_GPU
+  DiskSize:
+    Type: Number
+    Default: 4
+    Description: The root device disk size (in GiB) for your node group instances. The default disk size is 1 GiB.
+  ForceUpdateEnabled:
+    Type: String
+    Default: true
+    Description: Force the update if the existing node group's pods are unable to be drained due to a pod disruption budget issue. If an update fails because pods could not be drained, you can force the update after it fails to terminate the old node.
+    AllowedValues:
+      - true
+      - false
+  InstanceTypes:
+    Type: String
+    Default: t2.small
+    AllowedValues:
+      - t2.small
+      - t2.medium
+      - t2.large
+      - t2.xlarge
+      - t2.2xlarge
+    ConstraintDescription: Must be a valid EC2 instance type
+    Description: EC2 instance type for the node instances
+  EKSManagedNodeGroupName:
+    Type: String
+    Default: my-eks-worker-nodes
+    Description: The unique name to give your node group.
+  EksClusterNodeRoleIP:
+    Type: String
+    Description: The name of the instance profile to apply to the instance. EKS node group requires the full ARN of the IAM role.
+  NodeAutoScalingGroupMinSize:
+    Type: Number
+    Default: 1
+    Description: The minimum number of worker nodes that the managed node group can scale in to. This number must be greater than zero.
+  NodeAutoScalingGroupMaxSize:
+    Type: Number
+    Default: 3
+    Description: Maximum size of Node Group ASG. Set to at least 1 greater than NodeAutoScalingGroupDesiredCapacity.
+  NodeAutoScalingGroupDesiredSize:
+    Type: Number
+    Default: 1
+    Description: The current number of worker nodes that the managed node group should maintain.
+  Ec2SshKey:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: id_rsa-rogers-macbook
+    Description: Node login pem key stored in EC2>KeyPairs
+
+Resources:
+## EKS Build ##
+  EKS:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Ref EKSClusterName
+      ResourcesVpcConfig:
+        SecurityGroupIds: !Ref EksServiceSecurityGroupID
+        SubnetIds: !Ref SubnetIds
+      RoleArn: !Ref EksClusterServiceRole
+      Version: !Ref KubernetesVersion
+
+  EKSNodegroup:
+    Type: AWS::EKS::Nodegroup
+    DependsOn: EKS
+    Properties:
+      AmiType: !Ref AmiType
+      ClusterName: !Ref EKS
+      DiskSize: !Ref DiskSize
+      ForceUpdateEnabled: !Ref ForceUpdateEnabled
+      InstanceTypes:
+        - !Ref InstanceTypes
+      NodegroupName: !Ref EKSManagedNodeGroupName
+      NodeRole: !Ref EksClusterNodeRoleIP
+      ScalingConfig:
+        MinSize: !Ref NodeAutoScalingGroupMinSize
+        DesiredSize: !Ref NodeAutoScalingGroupDesiredSize
+        MaxSize: !Ref NodeAutoScalingGroupMaxSize
+      Subnets: !Ref SubnetIds
+      RemoteAccess:
+        Ec2SshKey: !Ref Ec2SshKey
+
+Outputs:
+  EksArn:
+    Value: !GetAtt EKS.Arn
+  CAData:
+    Value: !GetAtt EKS.CertificateAuthorityData
+  EKSEndpoint:
+    Value: !GetAtt EKS.Endpoint
+  EKSName:
+    Value: !Ref EKS

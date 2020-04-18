@@ -1,0 +1,254 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Setting up all the resources for an EKS cluster on existing AWS account. Pre-Req: AWS account in a 3 AZ VPC'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+  Vpc:
+    Description: The VPC Id
+    Type: String
+  EksClusterServiceRoleName:
+    Type: String
+    Default: EksClusterServiceRole
+  EksClusterNodeRoleName:
+    Type: String
+    Default: EksClusterNodeRole
+  EksServiceSecurityGroupName:
+    Type: String
+    Default: EksServiceSecurityGroup
+  EksNodeSecurityGroupName:
+    Type: String
+    Default: EksNodeSecurityGroup
+  AWSaccountAdminUserName:
+    Type: String
+    Default: p-admin
+  AWSaccountEKSAdminUserName:
+    Type: String
+    Default: p-eks-admin
+  EksKMSAliasName:
+    Type: String
+    Default: alias/eks-kms
+
+
+Resources:
+
+###### EKS Service Role ######
+  EksClusterServiceRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - eks.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: EksClusterServiceRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonEKSClusterPolicy
+        - arn:aws:iam::aws:policy/AmazonEKSServicePolicy
+      MaxSessionDuration: 3600
+      Path: /
+      RoleName: !Ref EksClusterServiceRoleName
+      Tags: 
+        - Key: Environment
+          Value: !Ref Environment
+
+###### EKS Node Role ######
+  EksClusterNodeRole:
+    Type: AWS::IAM::Role
+    Properties: 
+      AssumeRolePolicyDocument: 
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - ec2.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: EksClusterNodeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy
+        - arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy
+        - arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly
+      MaxSessionDuration: 3600
+      Path: /
+      RoleName: !Ref EksClusterNodeRoleName
+      Tags: 
+        - Key: Environment
+          Value: !Ref Environment
+
+
+## Service Security Group ##
+  EksServiceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: EksServiceSecurityGroup
+      GroupName: !Ref EksServiceSecurityGroupName
+      Tags: 
+        - Key: Environment
+          Value: !Ref Environment
+      VpcId: !Ref Vpc
+
+## Node Security Group ##
+  EksNodeSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    DependsOn: EksServiceSecurityGroup
+    Properties: 
+      GroupDescription: EksNodeSecurityGroup
+      GroupName: !Ref EksNodeSecurityGroupName
+      Tags: 
+        - Key: Environment
+          Value: !Ref Environment
+      VpcId: !Ref Vpc 
+
+### Service  Security group Ingress ###
+  EksServiceSecurityGroupIngress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: EksNodeSecurityGroup
+    Properties:
+      GroupId: !Ref EksServiceSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref EksNodeSecurityGroup
+
+### Service  Security group Egress ###
+  EksServiceSecurityGroupEgress1:    
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn: EksNodeSecurityGroup
+    Properties: 
+      DestinationSecurityGroupId: !Ref EksNodeSecurityGroup
+      FromPort: 1025
+      ToPort: 65535 
+      IpProtocol: tcp
+      GroupId: !Ref EksServiceSecurityGroup
+
+  EksServiceSecurityGroupEgress2:    
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn: EksNodeSecurityGroup
+    Properties: 
+      DestinationSecurityGroupId: !Ref EksNodeSecurityGroup
+      FromPort: 443
+      ToPort: 443 
+      IpProtocol: tcp
+      GroupId: !Ref EksServiceSecurityGroup
+
+### Node Security group Ingress ###
+  # Open every port to itself
+  EksNodeSecurityGroupIngress1:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: EksNodeSecurityGroup
+    Properties:
+      GroupId: !Ref EksNodeSecurityGroup
+      IpProtocol: -1
+      FromPort: -1
+      ToPort: -1
+      SourceSecurityGroupId: !Ref EksNodeSecurityGroup
+  # open 1024-65535 to service SG
+  EksNodeSecurityGroupIngress2:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: EksNodeSecurityGroup
+    Properties:
+      IpProtocol: tcp
+      FromPort: 1025
+      ToPort: 65535 
+      GroupId: !Ref EksNodeSecurityGroup
+      SourceSecurityGroupId: !Ref EksServiceSecurityGroup
+  # open 443 to Service SG
+  EksNodeSecurityGroupIngress3:
+    Type: AWS::EC2::SecurityGroupIngress
+    DependsOn: EksNodeSecurityGroup
+    Properties:
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443 
+      GroupId: !Ref EksNodeSecurityGroup
+      SourceSecurityGroupId: !Ref EksServiceSecurityGroup
+
+### Node Security group Egress ###
+  # All open
+  EksNodeSecurityGroupEgress1:    
+    Type: AWS::EC2::SecurityGroupEgress
+    DependsOn: EksNodeSecurityGroup
+    Properties: 
+      FromPort: -1
+      ToPort: -1 
+      GroupId: !Ref EksNodeSecurityGroup
+      IpProtocol: -1
+      CidrIp: 0.0.0.0/0 
+
+## SSH Key for cluster secret encryption
+  EksKMS:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Key for EKS cluster to use when encrypting your Kubernetes secrets
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: EKS-key
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
+          Action: kms:*
+          Resource: '*'
+        - Sid: Allow administration of the key
+          Effect: Allow
+          Principal:
+            AWS: !Sub 
+            - 'arn:aws:iam::${AWS::AccountId}:user/${AWSaccountAdminUserName}'
+            - {AWSaccountAdminUserName: !Ref AWSaccountAdminUserName}
+          Action:
+          - kms:Create*
+          - kms:Describe*
+          - kms:Enable*
+          - kms:List*
+          - kms:Put*
+          - kms:Update*
+          - kms:Revoke*
+          - kms:Disable*
+          - kms:Get*
+          - kms:Delete*
+          - kms:ScheduleKeyDeletion
+          - kms:CancelKeyDeletion
+          Resource: '*'
+
+  EksKMSAlias:
+    Type: AWS::KMS::Alias
+    Properties: 
+      AliasName: !Ref EksKMSAliasName
+      TargetKeyId: !GetAtt EksKMS.Arn
+
+###### Outputs ######
+Outputs:
+
+    EksClusterServiceRole:
+      Description: ARN of EKS service apiVersion role 
+      Value: !GetAtt EksClusterServiceRole.Arn
+
+    EksClusterNodeRole:
+      Description: ARN of EKS service apiVersion role 
+      Value: !GetAtt EksClusterNodeRole.Arn
+    
+    EksServiceSecurityGroupID:
+      Description: Group ID of EksServiceSecurityGroup
+      Value: !GetAtt EksServiceSecurityGroup.GroupId
+
+    EksNodeSecurityGroupID:
+      Description: Group ID of EksNodeSecurityGroup
+      Value: !GetAtt EksNodeSecurityGroup.GroupId
+
+    EksKmsKeyArn:
+      Description: ARN of EKS KMS key 
+      Value: !GetAtt EksKMS.Arn
+
+    EksKmsKeyAlias:
+      Description: ARN of EKS KMS key 
+      Value: !Ref EksKMSAlias
+      

@@ -2,6 +2,11 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Setting up a group and a user for EKS admin'
 
+Parameters:
+  UserName:
+    Type: String
+    Description: User name MUST be unique per account globally or it will create an irreversible error
+
 Resources:
 
 ## Custom Group ###
@@ -19,6 +24,7 @@ Resources:
       Groups: 
         - !Ref EKSAminIAMGroup
       Path: /
+      UserName: !Ref UserName
 
 ### Custom Policy ###
   EKSAdminIAMpolicy:
