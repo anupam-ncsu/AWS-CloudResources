@@ -216,7 +216,7 @@ These two groups can be defined as follows:
       AliasName: !Ref EksKMSAliasName
       TargetKeyId: !GetAtt EksKMS.Arn
 ```
-This complete set of resource will spin up as a single Cloudformation stack . Please fork my github file here.
+This complete set of resource will spin up as a single Cloudformation stack . [Please fork my github file here.](https://github.com/anupam-ncsu/AWS-CloudResources/blob/master/EKScluster/EKS-IAMresources.yaml)
 
 ### EKS Compute Resource
 This section deploys the actual bare-metals of your cluster(**hah Gotcha! there is no bare metal, its AWS, its upon some cloud in the sky**). 
@@ -254,7 +254,7 @@ It is worth mentioning that the smallest t-shirt size of EC2 that you can use is
       RemoteAccess:
         Ec2SshKey: !Ref Ec2SshKey
 ```
-This complete set of resource will spin up as a single Cloudformation stack . Please fork my github file here.
+This complete set of resource will spin up as a single Cloudformation stack . [Please fork my github file here.](https://github.com/anupam-ncsu/AWS-CloudResources/blob/master/EKScluster/EKS-ComputeResources.yaml)
 
 ---
 The cluster takes about 10-15 mins to be ready. To access the cluster, we will need to install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) on our local system. Kubectl is a command line tool for controlling Kubernetes clusters, allowing you to run commands against Kubernetes clusters. You can use kubectl to deploy applications, inspect and manage cluster resources, and view logs.
